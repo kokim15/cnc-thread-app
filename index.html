@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ff8a3d">
+<meta name="description" content="Professional G-code generator for CNC lathe threading. Metric ISO, Unified, Trapezoidal, Acme, NPT, BSPP standards. Works offline.">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230f141a' width='192' height='192'/><circle cx='96' cy='96' r='88' fill='%23ff8a3d'/><text x='96' y='120' text-anchor='middle' font-size='80' font-weight='bold' fill='white' font-family='Arial'>⚙</text></svg>">
 <title>CNC Lathe Threading Calculator & G-Code Generator</title>
 <style>
   :root{
@@ -36,7 +40,7 @@
   .stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .stat .v{font-size:15px;font-weight:700;color:var(--accent)}
   .stat .v small{font-size:10px;color:var(--muted);font-weight:400}
-  textarea{width:100%;height:430px;background:#0b0f14;color:#cfe9d2;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.5;resize:vertical;white-space:pre}
+  textarea{width:100%;height:430px;background:#0b0f14;color:#cfe9d2;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.4;resize:vertical}
   .btns{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
   .btn{background:var(--accent);color:#1a1206;border:none;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px}
   .btn.alt{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
@@ -49,14 +53,10 @@
   summary{cursor:pointer;color:var(--accent2);font-size:12px}
   .hidden{display:none}
   .err{color:var(--bad);font-size:12px;margin-top:6px}
-
-.sim-card{margin-top:16px}
-.sim-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-.sim-ctl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-.sim-ctl input[type=range]{width:110px}
-.sim-read{margin-left:auto;font-size:12px;color:var(--accent);font-family:Consolas,monospace}
-.sim-stage{width:100%;height:400px;background:#0a0e13;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.sim-stage canvas{display:block;width:100%;height:100%}
+  .pwa-badge{position:fixed;bottom:20px;right:20px;background:var(--accent);color:#1a1206;padding:12px 16px;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);display:none;z-index:1000}
+  .pwa-badge.show{display:block;animation:slideIn .3s ease-out}
+  @keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
+  .pwa-badge:hover{filter:brightness(1.1)}
 
 </style>
 </head>
@@ -237,12 +237,41 @@
   </div>
 </div>
 
-
-
-
-
+<div class="pwa-badge" id="pwaPrompt">+ Add to Home Screen</div>
 
 <script>
+/* ============================================================
+   Service Worker Registration
+   ============================================================ */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    console.log('✓ Service Worker registered');
+  }).catch(err=>{
+    console.log('Service Worker registration failed:', err);
+  });
+}
+
+/* ============================================================
+   PWA Install Prompt
+   ============================================================ */
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  document.getElementById('pwaPrompt').classList.add('show');
+});
+document.getElementById('pwaPrompt').addEventListener('click',()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(choice=>{
+    if(choice.outcome==='accepted'){
+      console.log('✓ PWA installed');
+    }
+    deferredPrompt=null;
+    document.getElementById('pwaPrompt').classList.remove('show');
+  });
+});
+
 /* ============================================================
    Thread standard database
    ============================================================ */
@@ -658,7 +687,7 @@ $('regen').addEventListener('click',render);
    Init
    ============================================================ */
 buildTypes();
-  buildSizes();
+buildSizes();
 $('size').value=$('size').options[0].value;
 applySize();
 defaultCut($('type').value);
