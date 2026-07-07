@@ -1,0 +1,28 @@
+{
+  "name": "CNC Lathe Threading Studio",
+  "short_name": "Thread Studio",
+  "description": "Professional G-code generator for CNC lathe threading. Metric ISO, Unified, Trapezoidal, Acme, NPT, BSPP standards. Works offline.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f141a",
+  "theme_color": "#ff8a3d",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230f141a' width='192' height='192'/><circle cx='96' cy='96' r='88' fill='%23ff8a3d'/><text x='96' y='120' text-anchor='middle' font-size='80' font-weight='bold' fill='white' font-family='Arial'>⚙</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "orientation": "portrait-primary",
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%230f141a' width='540' height='720'/><text x='270' y='300' text-anchor='middle' font-size='60' fill='%23ff8a3d' font-family='Arial'>CNC Threading</text><text x='270' y='380' text-anchor='middle' font-size='40' fill='%2336c2cf' font-family='Arial'>G-Code Generator</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ]
+}
