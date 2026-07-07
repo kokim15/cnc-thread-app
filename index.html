@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNC Lathe Threading Calculator & G-Code Generator</title>
+<style>
+  :root{
+    --bg:#0f141a; --panel:#171f29; --panel2:#1e2935; --line:#2a3744;
+    --txt:#e6edf3; --muted:#9fb0bf; --accent:#ff8a3d; --accent2:#36c2cf;
+    --ok:#5fd38a; --warn:#ffcf5f; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.45}
+  header{background:linear-gradient(90deg,#1b2733,#0f141a);border-bottom:2px solid var(--accent);padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;letter-spacing:.3px}
+  header .tag{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:2px 10px}
+  header .spacer{flex:1}
+  header .hint{color:var(--muted);font-size:12px}
+  .wrap{display:grid;grid-template-columns:460px 1fr;gap:16px;padding:16px;align-items:start}
+  @media(max-width:1100px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);border-bottom:1px dashed var(--line);padding-bottom:8px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .row.three{grid-template-columns:1fr 1fr 1fr}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field.full{grid-column:1/-1}
+  label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  select,input[type=text],input[type=number]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px;font-size:13px;width:100%}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:60px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:8px 6px;cursor:pointer;font-size:12px}
+  .seg button.active{background:var(--accent);color:#1a1206;border-color:var(--accent);font-weight:600}
+  .out-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .stat .v{font-size:15px;font-weight:700;color:var(--accent)}
+  .stat .v small{font-size:10px;color:var(--muted);font-weight:400}
+  textarea{width:100%;height:430px;background:#0b0f14;color:#cfe9d2;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.5;resize:vertical;white-space:pre}
+  .btns{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#1a1206;border:none;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px}
+  .btn.alt{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn:hover{filter:brightness(1.08)}
+  .note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .badge{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;background:var(--line);color:var(--txt);margin-left:6px}
+  .badge.orange{background:rgba(255,138,61,.18);color:var(--accent)}
+  .badge.cyan{background:rgba(54,194,207,.18);color:var(--accent2)}
+  details{margin-top:6px}
+  summary{cursor:pointer;color:var(--accent2);font-size:12px}
+  .hidden{display:none}
+  .err{color:var(--bad);font-size:12px;margin-top:6px}
+
+.sim-card{margin-top:16px}
+.sim-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.sim-ctl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.sim-ctl input[type=range]{width:110px}
+.sim-read{margin-left:auto;font-size:12px;color:var(--accent);font-family:Consolas,monospace}
+.sim-stage{width:100%;height:400px;background:#0a0e13;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.sim-stage canvas{display:block;width:100%;height:100%}
+
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙ CNC Lathe Threading Studio</h1>
+  <span class="tag">G-CODE GENERATOR</span>
+  <div class="spacer"></div>
+  <div class="hint">Metric · Unified · Trapezoidal · Acme · NPT · BSPP — straight & multi-start · output .nc</div>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: INPUTS -->
+  <div>
+    <div class="card">
+      <h2>1 · Thread Definition</h2>
+      <div class="row">
+        <div class="field">
+          <label>Thread Type</label>
+          <select id="type"></select>
+        </div>
+        <div class="field">
+          <label>Standard Size</label>
+          <select id="size"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Major Diameter <span id="unitD"></span></label>
+          <input type="number" id="major" step="0.0001">
+        </div>
+        <div class="field">
+          <label>Pitch <span id="unitP"></span> / <span id="tpiLabel">TPI</span></label>
+          <input type="number" id="pitch" step="0.0001">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Thread Angle (°)</label>
+          <input type="number" id="angle" step="1">
+        </div>
+        <div class="field">
+          <label>Hand</label>
+          <div class="seg" id="hand">
+            <button data-v="RH" class="active">Right (RH)</button>
+            <button data-v="LH">Left (LH)</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">Sizes auto-fill diameter &amp; pitch. Switch to a smaller size or type a value to use <b>Custom</b>. TPI = 1 / pitch (inch) — shown for reference.</div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Geometry / Part</h2>
+      <div class="row three">
+        <div class="field">
+          <label>Stock Ø <span id="u2"></span></label>
+          <input type="number" id="stock" step="0.01">
+        </div>
+        <div class="field">
+          <label>Thread Length</label>
+          <input type="number" id="length" step="0.1" value="20">
+        </div>
+        <div class="field">
+          <label>Lead-in Z <span id="u3"></span></label>
+          <input type="number" id="zstart" step="0.1" value="2">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Starts (multi-start)</label>
+          <input type="number" id="starts" step="1" value="1" min="1">
+        </div>
+        <div class="field">
+          <label>Lead (computed) <span id="u4"></span></label>
+          <input type="text" id="lead" readonly>
+        </div>
+      </div>
+      <div class="row" id="taperRow">
+        <div class="field full">
+          <label>Taper (diameter/length) — NPT=1:16</label>
+          <input type="number" id="taper" step="0.0001" value="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Cutting &amp; Control</h2>
+      <div class="row">
+        <div class="field">
+          <label>G-Code Style</label>
+          <select id="ctrl">
+            <option value="g76">Fanuc G76 (cycle)</option>
+            <option value="g92">G92 repeated (Fanuc/ISO)</option>
+            <option value="g33">G33 single-pass (ISO)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Program No. (O)</label>
+          <input type="number" id="pnum" step="1" value="1000">
+        </div>
+      </div>
+      <div class="row three">
+        <div class="field">
+          <label>Spindle RPM</label>
+          <input type="number" id="rpm" step="10" value="600">
+        </div>
+        <div class="field">
+          <label>Tool (T)</label>
+          <input type="number" id="tool" step="1" value="1">
+        </div>
+        <div class="field">
+          <label>Max RPM (G50)</label>
+          <input type="number" id="maxrpm" step="100" value="2500">
+        </div>
+      </div>
+      <div class="row three">
+        <div class="field">
+          <label>1st cut <span id="u5"></span></label>
+          <input type="number" id="d1" step="0.001">
+        </div>
+        <div class="field">
+          <label>Min cut <span id="u6"></span></label>
+          <input type="number" id="dmin" step="0.001">
+        </div>
+        <div class="field">
+          <label>Spring passes</label>
+          <input type="number" id="springs" step="1" value="2">
+        </div>
+      </div>
+      <div class="row three">
+        <div class="field">
+          <label>Finish allow. <span id="u7"></span></label>
+          <input type="number" id="finallow" step="0.001">
+        </div>
+        <div class="field">
+          <label>Finish passes</label>
+          <input type="number" id="mfin" step="1" value="2">
+        </div>
+        <div class="field">
+          <label>Chamfer (×lead)</label>
+          <input type="number" id="chamf" step="1" value="1" min="0" max="9">
+        </div>
+      </div>
+      <div class="note">1st/Min cut are <b>radial</b> depths. The app builds a decreasing-infeed schedule; spring passes repeat at final minor Ø.</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: RESULTS -->
+  <div>
+    <div class="card">
+      <h2>Computed Thread Geometry <span class="badge cyan" id="typeBadge"></span></h2>
+      <div class="out-grid" id="stats"></div>
+      <div class="note" id="formulaNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>Generated G-Code <span class="badge orange">.nc</span></h2>
+      <textarea id="gcode" spellcheck="false" readonly></textarea>
+      <div class="btns">
+        <button class="btn" id="dl">⬇ Download .nc</button>
+        <button class="btn alt" id="copy">⧉ Copy</button>
+        <button class="btn alt" id="regen">↻ Regenerate</button>
+      </div>
+      <div class="err hidden" id="warn"></div>
+      <details>
+        <summary>About the output &amp; safety notes</summary>
+        <div class="note">
+          • <b>Fanuc G76</b> (P m r a / Q min / R finish, then X Z R P Q F) is the most common lathe threading cycle.<br>
+          • <b>G92 / G33</b> list every pass explicitly — easy to verify and tune by hand.<br>
+          • All depths shown are <b>radial</b>. Minor Ø = Major Ø − 2 × depth.<br>
+          • Verify spindle direction: RH = M03, LH = M04 (helix follows feed direction).<br>
+          • Confirm tool nose angle, stock turned to major Ø, and that lead-in/out clears the part before running.<br>
+          • Always dry-run / single-block the first part. Constants suit typical stock; adjust for your material &amp; insert.
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+<script>
+/* ============================================================
+   Thread standard database
+   ============================================================ */
+const DB = {
+  metric: {
+    label:"Metric ISO (M) — 60°", angle:60, units:"mm",
+    series:{ "Coarse":[
+      [3,0.5],[3.5,0.6],[4,0.7],[4.5,0.75],[5,0.8],[6,1.0],[7,1.0],[8,1.25],[9,1.25],[10,1.5],
+      [11,1.5],[12,1.75],[14,2.0],[15,2.0],[16,2.0],[17,2.0],[18,2.5],[20,2.5],[22,2.5],[24,3.0],
+      [25,3.0],[27,3.0],[30,3.5],[33,3.5],[35,4.0],[36,4.0],[39,4.0],[40,4.5],[42,4.5],[45,4.5],
+      [48,5.0],[50,5.0],[52,5.0],[55,5.5],[56,5.5],[60,5.5],[64,6.0],[68,6.0],[70,6.0],[72,6.0],
+      [75,6.0],[80,6.0]
+    ], "Fine":[
+      [8,1.0],[10,1.0],[10,1.25],[12,1.25],[12,1.5],[14,1.5],[16,1.5],[18,1.5],[20,1.5],[22,1.5],
+      [24,2.0],[27,2.0],[30,2.0],[33,2.0],[36,3.0],[39,3.0],[42,3.0],[45,3.0],[48,3.0],[50,3.0],
+      [52,4.0],[56,4.0],[60,4.0],[64,4.0],[70,4.0],[80,4.0]
+    ]}
+  },
+  unc: {
+    label:"Unified Coarse (UNC) — 60°", angle:60, units:"inch", imperial:true,
+    series:{ "UNC":[
+      [0.25,20],[0.3125,18],[0.375,16],[0.4375,14],[0.5,13],[0.5625,12],[0.625,11],[0.75,10],
+      [0.875,9],[1.0,8],[1.25,7],[1.5,6],[1.75,5],[2.0,4.5]
+    ]}
+  },
+  unf: {
+    label:"Unified Fine (UNF) — 60°", angle:60, units:"inch", imperial:true,
+    series:{ "UNF":[
+      [0.25,28],[0.3125,24],[0.375,24],[0.4375,20],[0.5,20],[0.5625,18],[0.625,18],[0.75,16],
+      [0.875,14],[1.0,12],[1.25,12],[1.5,12]
+    ]}
+  },
+  trap: {
+    label:"Trapezoidal (Tr) — 30°", angle:30, units:"mm",
+    series:{ "Trapezoidal":[
+      [10,2],[12,3],[14,3],[16,4],[18,4],[20,4],[22,5],[24,5],[26,5],[28,5],[30,6],[32,6],
+      [36,6],[40,7],[44,7],[48,8],[50,8],[55,9],[60,9],[65,10],[70,10],[80,10],[90,12],[100,12]
+    ]}
+  },
+  acme: {
+    label:"Acme (29°) — inch", angle:29, units:"inch", imperial:true,
+    series:{ "Acme":[
+      [0.25,16],[0.375,12],[0.5,10],[0.625,8],[0.75,6],[0.875,6],[1.0,5],[1.25,5],[1.5,4],
+      [1.75,4],[2.0,4],[2.5,4],[3.0,2],[3.5,2],[4.0,2]
+    ]}
+  },
+  npt: {
+    label:"NPT Tapered Pipe — 60°", angle:60, units:"inch", imperial:true, taper:1/16,
+    series:{ "NPT":[
+      [0.3125,27],[0.405,27],[0.54,18],[0.675,18],[0.84,14],[1.05,14],[1.315,11.5],[1.66,11.5],
+      [1.9,11.5],[2.375,11.5]
+    ]}
+  },
+  bspp: {
+    label:"BSPP Parallel (G) — 55°", angle:55, units:"mm",
+    series:{ "BSPP":[
+      [9.728,28],[13.157,19],[16.662,19],[20.955,14],[22.911,14],[26.441,14],[33.249,11],
+      [41.91,11],[47.803,11],[59.614,11]
+    ]}
+  }
+};
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const round = (x,n=3)=>{const f=Math.pow(10,n);return Math.round(x*f)/f;};
+const pad2 = n=>{n=Math.round(n);return (n<10?'0':'')+n;};
+const fmt = (x,inch)=> inch ? x.toFixed(4) : x.toFixed(3);
+const fmt0 = (x,inch)=> inch ? x.toFixed(4) : x.toFixed(3);
+const mic = (x,inch)=> Math.round(x*(inch?10000:1000)); // G76 Q/R/P integer
+
+/* ============================================================
+   Build type select
+   ============================================================ */
+function buildTypes(){
+  const sel=$('type'); sel.innerHTML='';
+  for(const k in DB){
+    const o=document.createElement('option'); o.value=k; o.textContent=DB[k].label; sel.appendChild(o);
+  }
+}
+
+/* ============================================================
+   Build size select for current type
+   ============================================================ */
+function buildSizes(){
+  const type=$('type').value;
+  const db=DB[type];
+  const sel=$('size'); sel.innerHTML='';
+  for(const ser in db.series){
+    const og=document.createElement('optgroup'); og.label=ser;
+    db.series[ser].forEach(([d,p])=>{
+      const o=document.createElement('option');
+      o.value=JSON.stringify({d,p,ser});
+      let lbl;
+      if(db.imperial){ lbl=`${d}" × ${p} TPI`; if(db.taper) lbl=`${d}" NPT`; }
+      else if(type==='bspp'){ lbl=`G ${d}mm × ${p} TPI`; }
+      else if(type==='trap'){ lbl=`Tr ${d} × ${p}`; }
+      else if(type==='acme'){ lbl=`${d}" Acme × ${p} TPI`; }
+      else { lbl=`M${d} × ${p}`; if(ser==='Fine') lbl+=' (fine)'; }
+      o.textContent=lbl; og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  const oc=document.createElement('option'); oc.value='custom'; oc.textContent='— Custom —'; sel.appendChild(oc);
+}
+
+/* ============================================================
+   Apply a chosen size to the inputs
+   ============================================================ */
+function applySize(){
+  const type=$('type').value, db=DB[type];
+  const val=$('size').value;
+  if(val==='custom'){ $('major').readOnly=false; $('pitch').readOnly=false; return; }
+  const {d,p}=JSON.parse(val);
+  $('major').readOnly=true; $('pitch').readOnly=true;
+  if(db.imperial){
+    $('major').value=d;            // inches
+    $('pitch').value=round(1/p,4); // inch pitch = 1/TPI
+  } else if(type==='bspp'){
+    $('major').value=d;            // mm
+    $('pitch').value=round(25.4/p,4); // mm pitch from TPI
+  } else {
+    $('major').value=d;            // mm
+    $('pitch').value=p;            // mm
+  }
+  $('angle').value=db.angle;
+  // default stock = major
+  $('stock').value = db.imperial ? round(d,4) : d;
+  // taper
+  $('taper').value = db.taper ? round(db.taper,4) : 0;
+}
+
+/* ============================================================
+   Default cutting params per unit system
+   ============================================================ */
+function defaultCut(type){
+  const db=DB[type];
+  if(db.imperial){
+    $('d1').value=0.008; $('dmin').value=0.002; $('finallow').value=0.001;
+  } else {
+    $('d1').value=0.20; $('dmin').value=0.05; $('finallow').value=0.02;
+  }
+}
+
+/* ============================================================
+   Core geometry computation
+   ============================================================ */
+function computeGeometry(){
+  const type=$('type').value, db=DB[type];
+  const inch=!!db.imperial;
+  const major=parseFloat($('major').value);
+  // pitch field always holds the actual pitch (mm or inch); imperial size sets it to 1/TPI.
+  const pitch=parseFloat($('pitch').value);
+  const angle=parseFloat($('angle').value);
+  const starts=Math.max(1,parseInt($('starts').value)||1);
+  const lead = pitch*starts;
+
+  // thread height & depth
+  let H, depth, note;
+  if(angle===60){ H=0.866025*pitch; depth=0.541266*pitch; note="60° V: H=0.866P, depth=0.5413P"; }
+  else if(angle===55){ H=0.960491*pitch; depth=0.640327*pitch; note="55° Whitworth/BSP: H=0.9605P, depth=0.6403P"; }
+  else if(angle===30){ H=0.866025*pitch; depth=0.5*pitch; note="30° Trapezoidal: depth=0.5P (+root clearance)"; }
+  else if(angle===29){ H=0.960491*pitch; depth=0.5*pitch; note="29° Acme: depth=0.5P (+0.005″ clearance external)"; }
+  else { H=0.866025*pitch; depth=0.541266*pitch; note="Generic 60°: depth=0.5413P"; }
+
+  const minor = major - 2*depth;
+  const pitchDia = major - (angle===60?0.649519:angle===55?0.640327*1.0:angle===30?0.5:0.5)*pitch;
+  // pitch diameter proper:
+  const pd = angle===60 ? major-0.649519*pitch
+          : angle===55 ? major-0.640327*pitch
+          : angle===30 ? major-0.5*pitch
+          : angle===29 ? major-0.5*pitch
+          : major-0.649519*pitch;
+
+  return {type,db,inch,major,pitch,angle,starts,lead,H,depth,minor,pitchDia:pd,
+          stock:parseFloat($('stock').value), length:parseFloat($('length').value),
+          zstart:parseFloat($('zstart').value), taper:parseFloat($('taper').value)||0, note};
+}
+
+/* ============================================================
+   Build descending pass diameters (for G92 / G33)
+   ============================================================ */
+function passDiameters(stockD, minorD, d1, dmin, springs){
+  const ds=[]; let x=stockD-2*d1, cut=d1;
+  if(x<minorD) x=stockD-2*((stockD-minorD)/2); // safety
+  while(true){
+    if(x<=minorD+1e-9){ ds.push(minorD); break; }
+    ds.push(x);
+    const nxt=Math.max(dmin,cut*0.7); x-=2*nxt; cut=nxt;
+  }
+  for(let i=0;i<springs;i++) ds.push(minorD);
+  return ds; // descending diameters
+}
+
+/* ============================================================
+   G-Code generators
+   ============================================================ */
+function genG76(g){
+  const inch=g.inch;
+  const Pword=`P${pad2($('mfin').value)}${pad2($('chamf').value)}${pad2(g.angle)}`;
+  const dminM=mic(parseFloat($('dmin').value),inch);
+  const finM =mic(parseFloat($('finallow').value),inch);
+  const d1M  =mic(parseFloat($('d1').value),inch);
+  const depthM=mic(g.depth,inch);
+  const dir = currentHand()==='RH' ? 'M03' : 'M04';
+  const L=g.length, z0=g.zstart;
+  const taperR = g.taper*L/2; // radius taper over length (1:16 -> L/32)
+  const lines=[];
+  lines.push(`O${$('pnum').value}`);
+  lines.push(`(THREAD: ${typeDesc(g)} ${currentHand()})`);
+  lines.push(`(MAJOR=${fmt(g.major,inch)}  PITCH=${fmt(g.pitch,inch)}  LEAD=${fmt(g.lead,inch)}  STARTS=${g.starts})`);
+  lines.push(`(MINOR=${fmt(g.minor,inch)}  DEPTH=${fmt(g.depth,inch)}  ANGLE=${g.angle})`);
+  lines.push(`G18 G40 G99`);
+  lines.push(inch?'G20':'G21');
+  lines.push(`G28 U0 W0`);
+  lines.push(`T${pad2($('tool').value)}${$('tool').value.length<=2?'':' '}M06`);
+  lines.push(`G50 S${$('maxrpm').value}`);
+  lines.push(`G97 S${$('rpm').value} ${dir}`);
+  lines.push(`G00 X${fmt(g.stock+ (inch?0.1:1),inch)} Z${fmt(z0+ (inch?0.1:1),inch)}`);
+  lines.push(`G00 X${fmt(g.stock,inch)}`);
+  for(let s=0;s<g.starts;s++){
+    const zo=s*g.pitch;
+    if(g.starts>1) lines.push(`(--- START ${s+1} of ${g.starts} : Z offset ${fmt(zo,inch)} ---)`);
+    lines.push(`G00 Z${fmt(z0+zo,inch)}`);
+    lines.push(`G76 ${Pword} Q${dminM} R${finM}`);
+    const zEnd=z0 - L + zo;
+    lines.push(`G76 X${fmt(g.minor,inch)} Z${fmt(zEnd,inch)} R${fmt(taperR,inch)} P${depthM} Q${d1M} F${fmt(g.lead,inch)}`);
+  }
+  lines.push(`G00 X${fmt(g.stock+(inch?0.5:5),inch)}`);
+  lines.push(`G28 U0 W0`);
+  lines.push(`M05`);
+  lines.push(`M30`);
+  lines.push(`%`);
+  return lines.join('\n');
+}
+
+function genG92(g){
+  const inch=g.inch;
+  const dir=currentHand()==='RH'?'M03':'M04';
+  const d1=parseFloat($('d1').value), dmin=parseFloat($('dmin').value), springs=parseInt($('springs').value)||0;
+  const ds=passDiameters(g.stock,g.minor,d1,dmin,springs);
+  const L=g.length, z0=g.zstart;
+  const lines=[];
+  lines.push(`O${$('pnum').value}`);
+  lines.push(`(THREAD: ${typeDesc(g)} ${currentHand()} — G92 MULTI-PASS)`);
+  lines.push(`(MAJOR=${fmt(g.major,inch)} MINOR=${fmt(g.minor,inch)} PASSES=${ds.length})`);
+  lines.push(`G18 G40 G99`);
+  lines.push(inch?'G20':'G21');
+  lines.push(`G28 U0 W0`);
+  lines.push(`T${pad2($('tool').value)} M06`);
+  lines.push(`G50 S${$('maxrpm').value}`);
+  lines.push(`G97 S${$('rpm').value} ${dir}`);
+  for(let s=0;s<g.starts;s++){
+    const zo=s*g.pitch;
+    if(g.starts>1) lines.push(`(--- START ${s+1} : Z offset ${fmt(zo,inch)} ---)`);
+    lines.push(`G00 X${fmt(g.stock,inch)} Z${fmt(z0+zo,inch)}`);
+    const zEnd=z0 - L + zo;
+    ds.forEach((d,i)=>{
+      lines.push(`${i===0?'G92':'   '} X${fmt(d,inch)} Z${fmt(zEnd,inch)} F${fmt(g.lead,inch)}`);
+    });
+    lines.push(`G00 X${fmt(g.stock+(inch?0.5:5),inch)}`);
+  }
+  lines.push(`G28 U0 W0`);
+  lines.push(`M05`);
+  lines.push(`M30`);
+  lines.push(`%`);
+  return lines.join('\n');
+}
+
+function genG33(g){
+  const inch=g.inch;
+  const dir=currentHand()==='RH'?'M03':'M04';
+  const d1=parseFloat($('d1').value), dmin=parseFloat($('dmin').value), springs=parseInt($('springs').value)||0;
+  const ds=passDiameters(g.stock,g.minor,d1,dmin,springs);
+  const L=g.length, z0=g.zstart;
+  const lines=[];
+  lines.push(`O${$('pnum').value}`);
+  lines.push(`(THREAD: ${typeDesc(g)} ${currentHand()} — G33 SINGLE-PASS)`);
+  lines.push(`(MAJOR=${fmt(g.major,inch)} MINOR=${fmt(g.minor,inch)} PASSES=${ds.length})`);
+  lines.push(`G18 G40 G99`);
+  lines.push(inch?'G20':'G21');
+  lines.push(`G28 U0 W0`);
+  lines.push(`T${pad2($('tool').value)} M06`);
+  lines.push(`G50 S${$('maxrpm').value}`);
+  lines.push(`G97 S${$('rpm').value} ${dir}`);
+  for(let s=0;s<g.starts;s++){
+    const zo=s*g.pitch;
+    if(g.starts>1) lines.push(`(--- START ${s+1} : Z offset ${fmt(zo,inch)} ---)`);
+    ds.forEach(d=>{
+      lines.push(`G00 X${fmt(g.stock,inch)} Z${fmt(z0+zo,inch)}`);
+      lines.push(`G33 X${fmt(d,inch)} Z${fmt(z0-L+zo,inch)} F${fmt(g.lead,inch)}`);
+    });
+  }
+  lines.push(`G00 X${fmt(g.stock+(inch?0.5:5),inch)}`);
+  lines.push(`G28 U0 W0`);
+  lines.push(`M05`);
+  lines.push(`M30`);
+  lines.push(`%`);
+  return lines.join('\n');
+}
+
+/* ============================================================
+   Small utilities
+   ============================================================ */
+function currentHand(){ const b=document.querySelector('#hand button.active'); return b?b.dataset.v:'RH'; }
+function typeDesc(g){
+  const t=g.type;
+  if(t==='metric') return `M${fmt(g.major,false)}x${fmt(g.pitch,false)}`;
+  if(t==='trap') return `Tr${fmt(g.major,false)}x${fmt(g.pitch,false)}`;
+  if(t==='bspp') return `G${fmt(g.major,false)}`;
+  if(t==='npt') return `${g.major}" NPT`;
+  if(t==='acme') return `${g.major}" ACME`;
+  if(t==='unc') return `${g.major}"-${Math.round(1/g.pitch)}UNC`;
+  if(t==='unf') return `${g.major}"-${Math.round(1/g.pitch)}UNF`;
+  return 'THREAD';
+}
+
+/* ============================================================
+   Render
+   ============================================================ */
+function render(){
+  const g=computeGeometry();
+  const inch=g.inch;
+  // units labels
+  const u=inch?'in':'mm';
+  ['unitD','unitP','u2','u3','u4','u5','u6','u7'].forEach(id=>$(id).textContent='('+u+')');
+  $('tpiLabel').textContent = inch?'TPI':'pitch';
+  $('typeBadge').textContent = g.db.label;
+  $('formulaNote').textContent = g.note + (g.taper?`  • Taper ${g.taper.toFixed(4)} (1:${round(1/g.taper,1)}).`:'');
+  $('lead').value = fmt(g.lead,inch)+' '+u;
+
+  // stats
+  const stats=[
+    ['Major Ø',fmt(g.major,inch),u],
+    ['Minor Ø',fmt(g.minor,inch),u],
+    ['Pitch Ø',fmt(g.pitchDia,inch),u],
+    ['Pitch',fmt(g.pitch,inch),u],
+    ['Lead',fmt(g.lead,inch),u],
+    ['Depth (rad)',fmt(g.depth,inch),u],
+    ['Thread H',fmt(g.H,inch),u],
+    ['Starts',g.starts,''],
+    ['TPI',inch?Math.round(1/g.pitch):round(25.4/g.pitch,1),''],
+  ];
+  $('stats').innerHTML = stats.map(([k,v,uu])=>
+    `<div class="stat"><div class="k">${k}</div><div class="v">${v} <small>${uu}</small></div></div>`).join('');
+
+  // gcode
+  let code='';
+  try{
+    const ctrl=$('ctrl').value;
+    if(ctrl==='g76') code=genG76(g);
+    else if(ctrl==='g92') code=genG92(g);
+    else code=genG33(g);
+  }catch(e){ code='(error generating code: '+e.message+')'; }
+  $('gcode').value=code;
+
+  // warnings
+  const w=$('warn'); let msgs=[];
+  if(g.depth<=0) msgs.push('Depth not positive — check pitch/angle.');
+  if(g.minor>=g.major) msgs.push('Minor Ø ≥ Major Ø — infeasible.');
+  if(parseFloat($('stock').value) < g.major-1e-6) msgs.push('Stock Ø is smaller than major Ø — increase stock or it must be turned first.');
+  if(g.starts>1 && $('ctrl').value!=='g76') msgs.push('Multi-start shown as Z-offset starts — verify angular phasing on your control.');
+  if(msgs.length){ w.textContent='⚠ '+msgs.join('  '); w.classList.remove('hidden'); }
+  else w.classList.add('hidden');
+}
+
+/* ============================================================
+   Hand toggle
+   ============================================================ */
+document.querySelectorAll('#hand button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#hand button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); render();
+  });
+});
+
+/* ============================================================
+   Wire events
+   ============================================================ */
+$('type').addEventListener('change',()=>{
+  const type=$('type').value;
+  buildSizes(); $('size').value=$('size').options[0].value;
+  applySize(); defaultCut(type);
+  $('stock').value = DB[type].imperial ? round(parseFloat($('major').value),4) : parseFloat($('major').value);
+  render();
+});
+$('size').addEventListener('change',()=>{ applySize(); render(); });
+['major','pitch','angle','starts','length','zstart','taper','stock',
+ 'rpm','tool','maxrpm','d1','dmin','springs','finallow','mfin','chamf','pnum','ctrl']
+ .forEach(id=>$(id).addEventListener('input',render));
+
+/* ============================================================
+   Download / copy
+   ============================================================ */
+$('dl').addEventListener('click',()=>{
+  const code=$('gcode').value;
+  const blob=new Blob([code],{type:'text/plain'});
+  const a=document.createElement('a');
+  const name=`THREAD_${typeDesc(computeGeometry()).replace(/[^A-Za-z0-9_]/g,'')}_O${$('pnum').value}.nc`;
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('copy').addEventListener('click',()=>{
+  navigator.clipboard.writeText($('gcode').value).then(()=>{
+    const b=$('copy'); const t=b.textContent; b.textContent='✓ Copied';
+    setTimeout(()=>b.textContent=t,1200);
+  });
+});
+$('regen').addEventListener('click',render);
+
+/* ============================================================
+   Init
+   ============================================================ */
+buildTypes();
+  buildSizes();
+$('size').value=$('size').options[0].value;
+applySize();
+defaultCut($('type').value);
+$('stock').value = DB[$('type').value].imperial ? round(parseFloat($('major').value),4) : parseFloat($('major').value);
+render();
+</script>
+</body>
+</html>
