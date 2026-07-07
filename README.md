@@ -12,6 +12,7 @@ A single-file, offline web app that programs **any kind of lathe thread** and ou
 - **Multi-start** threads, right/left hand, custom sizes
 - Tuneable: stock Ø, length, lead-in, RPM, 1st/min cut, spring passes, finish allowance, chamfer
 - Download `.nc` or copy to clipboard
+- **📱 Installable PWA** — works offline on desktop, tablet, and mobile
 
 ## How to use
 1. Pick a thread type and standard size (or enter a custom major Ø & pitch).
@@ -22,7 +23,17 @@ A single-file, offline web app that programs **any kind of lathe thread** and ou
 ## Run it
 It is a **single self-contained `index.html`** — no server, no build, no dependencies.
 - Open `index.html` directly in any browser (works offline), **or**
-- Host it on any static host (GitHub Pages, Netlify, Cloudflare Pages, etc.).
+- Host it on any static host (GitHub Pages, Netlify, Cloudflare Pages, etc.), **or**
+- **Install as an app**:
+  - Open in a modern browser (Chrome, Edge, Safari, Firefox)
+  - Look for the **+ Add to Home Screen** button (bottom-right) or use your browser's menu → "Install app"
+  - Launch from your home screen or app drawer — works fully offline
+
+## Offline & PWA
+This app includes:
+- **Service Worker** for offline support
+- **Web App Manifest** for installability
+- **Zero external dependencies** — all code is self-contained
 
 ## Safety
 Constants suit typical stock; verify spindle direction (RH = M03, LH = M04), tool nose angle,
